@@ -1,4 +1,6 @@
-# Eval Hub Local Test
+# Eval Hub Local Demo
+
+Showcase how eval-hub-server can be used to run evaluation locally. This example hook it up with lighteval framework
 
 ## Prerequisites
 
@@ -70,7 +72,7 @@ curl --request POST \
   --header 'content-type: application/json' \
   --data '{
   "model": {
-    "url": "http://127.0.0.1:8001",
+    "url": "http://localhost:8001",
     "name": "qwen2.5-1.5b-instruct-q4_k_m.gguf"
   },
   "benchmarks": [
