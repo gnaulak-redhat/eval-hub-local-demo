@@ -4,14 +4,15 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     # temp: till sdk pulls in correct server version
-    "PyGithub",
-    "httpx",
+    # "PyGithub",
+    # "httpx",
 
     # Framework of choice
     # LightEval framework
     "lighteval==0.13.0",
     # LiteLLM for endpoint support
     "litellm[caching]==1.80.17",
+
     # Eval-hub SDK for framework adapter pattern
     "eval-hub-sdk[adapter]==0.1.0a9",
     "mlflow-skinny==3.10.0rc0",

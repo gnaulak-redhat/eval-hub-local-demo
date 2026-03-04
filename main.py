@@ -631,9 +631,6 @@ class LightEvalAdapter(FrameworkAdapter):
         Returns:
             List of paths to saved files
         """
-        # output_dir = self.local_jobs_base_path / "results"
-
-        # Can be generalised for k8s and local mode
         if self.local_jobs_base_path is not None:
             output_dir = self.local_jobs_base_path / "results"
         else:
@@ -720,10 +717,12 @@ def main() -> None:
     Environment variables:
     - EVALHUB_MODE: "k8s" or "local" (default: local)
     - EVALHUB_JOB_SPEC_PATH: Override job spec path
-    - REGISTRY_URL: OCI registry URL (e.g., ghcr.io)
-    - REGISTRY_USERNAME: Registry username
-    - REGISTRY_PASSWORD: Registry password/token
-    - REGISTRY_INSECURE: Allow insecure HTTP (default: false)
+    - OCI_AUTH_CONFIG_PATH: Path to OCI auth config file
+    - OCI_INSECURE: Allow insecure HTTP for OCI registry (default: false)
+    - EVALHUB_AUTH_TOKEN_PATH: Path to auth token for evalhub callbacks
+    - EVALHUB_CA_BUNDLE_PATH: Path to CA bundle for evalhub callbacks
+    - EVALHUB_INSECURE: Allow insecure HTTP for evalhub callbacks (default: false)
+    - MLFLOW_TRACKING_URI: MLflow tracking server URL
 
     Note: The service URL for callbacks comes from job_spec.callback_url (mounted via ConfigMap)
     """
@@ -737,9 +736,15 @@ def main() -> None:
         format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     )
 
-    # logger.debug("Effective environment variables:\n%s", "\n".join(
-    #     f"  {k}={v}" for k, v in sorted(os.environ.items())
-    # ))
+    _tracked_env_vars = [
+        "EVALHUB_MODE", "EVALHUB_JOB_SPEC_PATH",
+        "OCI_AUTH_CONFIG_PATH", "OCI_INSECURE",
+        "EVALHUB_AUTH_TOKEN_PATH", "EVALHUB_CA_BUNDLE_PATH", "EVALHUB_INSECURE",
+        "MLFLOW_TRACKING_URI",
+    ]
+    logger.debug("Effective environment variables:\n%s", "\n".join(
+        f"  {k}={os.environ.get(k, '<not set>')}" for k in _tracked_env_vars
+    ))
 
     try:
         # Create adapter with job spec path from environment or default
@@ -771,7 +776,6 @@ def main() -> None:
             oci_auth_config_path=adapter.settings.oci_auth_config_path,
             oci_insecure=bool(adapter.settings.oci_insecure),
         )
-
 
         # Run benchmark job
         results = adapter.run_benchmark_job(adapter.job_spec, callbacks)
