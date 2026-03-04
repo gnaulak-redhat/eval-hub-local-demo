@@ -1,0 +1,41 @@
+id: c_provider1
+name: Custom Provider 1
+description: Custom provider 1 for evaluation framework
+type: custom
+runtime:
+  local:
+    command: "python main.py"
+    env:
+      - name: LOG_LEVEL
+        value: DEBUG
+      - name: OCI_INSECURE
+        value: "true"
+        
+
+benchmarks:
+  - id: gsm8k
+    name: C_GSM8Kier
+    description: Custom Grade School Math 8K - arithmetic reasoning
+    category: math
+    metrics:
+      - exact_match
+      - accuracy
+    num_few_shot: 8
+    dataset_size: 1319
+    tags:
+      - math
+      - reasoning
+      - c_provider1
+  - id: hellaswag
+    name: C_HellaSwag
+    description: Commonsense reasoning around everyday activities
+    category: reasoning
+    metrics:
+      - accuracy
+      - acc_norm
+    num_few_shot: 0
+    dataset_size: 10042
+    tags:
+      - reasoning
+      - commonsense
+      - c_provider1

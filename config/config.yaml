@@ -1,0 +1,41 @@
+service:
+  port: 8080
+  disable_auth: true 
+  # These will be elsewhere on a cluster and coherent with the pod spec
+  ready_file: "/tmp/repo-ready"
+  termination_file: "/tmp/termination-log"
+# These are here so that the config can be loaded from the secrets directory when needed
+secrets:
+  dir: /tmp
+  mappings:
+    # db_password: database.password
+# These are here so that the config can be loaded from the environment variables when needed
+env_mappings:
+  PORT: service.port
+  DB_URL: database.url
+  MLFLOW_TRACKING_URI: mlflow.tracking_uri
+  MLFLOW_CA_CERT_PATH: mlflow.ca_cert_path
+  MLFLOW_INSECURE_SKIP_VERIFY: mlflow.insecure_skip_verify
+  MLFLOW_TOKEN_PATH: mlflow.token_path
+  MLFLOW_WORKSPACE: mlflow.workspace
+# Database configuration
+database:
+  driver: sqlite
+  url: file::eval_hub:?mode=memory&cache=shared
+  # driver: pgx
+  # url: postgres://user@localhost:5432/eval_hub
+# MLFlow configuration
+mlflow:
+  tracking_uri: http://localhost:5000
+# This is an example of how to enable instrumentation in a cluster
+otel:
+  enabled: false
+  exporter_type: "otlp-grpc"
+  exporter_endpoint: "localhost:4317"
+  exporter_insecure: true
+  sampling_ratio: 1.0
+  enable_tracing: true
+  # enable_metrics: true
+  # enable_logs: true
+prometheus:
+  enabled: true
