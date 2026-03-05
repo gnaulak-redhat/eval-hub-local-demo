@@ -1,15 +1,41 @@
-# Eval Hub Local Demo
+# 1. Eval Hub Local Demo
 
 Showcase how eval-hub-server can be used to run evaluation locally. This example hook it up with lighteval framework
 
-## Prerequisites
-
-- MLflow server running at `http://localhost:5000`
-- OCI registry running at `localhost:5001`
+# 2. Setup
+- 2.1 install eval-hub-sdk and other required packages
+- 2.2 hook up `main.py` with eval-hub-sdk adaptor
+- 2.3 MLflow server running at `http://localhost:5000`
+- 2.4 OCI registry running at `localhost:5001`
   - `crane` tool can be used to validate the OCI (optional)
-- LLM deployed `http://localhost:8001` 
+- 2.5 LLM deployed `http://localhost:8001` 
 
-## Start MLflow server
+## 2.1 install eval-hub-sdk and other required packages
+
+```bash
+uv sync
+source .venv/bin/activate
+```
+> **Note:** Currently `eval-hub-sdk[adapter, server]` are both sourced from wheel files available locally via `pyproject.toml` bypass. When ready, they will be available from PyPI directly.
+
+
+
+## 2.2 hook up `main.py` with eval-hub-sdk adaptor
+
+Update main.py with logic, implement `FrameworkAdapter`:
+- main
+  - run_benchmark_job
+    - callbacks.report_status
+    - callbacks.create_oci_artifact
+  - callbacks.report_results
+  - callbacks.report_metrics_to_mlflow
+
+Update config dir files ~/config:
+- providers yaml file(s)
+- config.yaml
+
+
+## 2.3  Start MLflow server
 
 ```bash
 mlflow server \
@@ -19,7 +45,7 @@ mlflow server \
 ```
 
 
-## Start OCI registry
+## 2.4 Start OCI registry
 
 ```bash
 podman run -d -p 5001:5000 \
@@ -29,7 +55,7 @@ podman run -d -p 5001:5000 \
 
 ```
 
-## Start LLM model
+## 2.5 Start LLM model
 
 Using llama.cpp
 ```bash
@@ -43,13 +69,8 @@ Start the server
 llama-server -m qwen2.5-1.5b-instruct-q4_k_m.gguf -c 2048 --port 8001
 ```
 
-## Install eval-hub-server
+# 3. Runnimg Evaluation job
 
-```bash
-uv sync
-source .venv/bin/activate
-```
-> **Note:** Currently `eval-hub-sdk[adapter, server]` are both sourced from wheel files available locally via `pyproject.toml` bypass. When ready, they will be available from PyPI directly.
 
 ## Start eval-hub-server
 
@@ -62,7 +83,7 @@ SERVICE_URL=http://localhost:8080 \
 ```
 
 
-## Evaluation job
+## Create Evaluation job
 
 
 Start evaluation job

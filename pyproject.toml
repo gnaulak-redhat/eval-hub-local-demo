@@ -11,7 +11,7 @@ dependencies = [
 
     # Eval-hub SDK for framework adapter pattern
     "eval-hub-sdk[adapter]==0.1.0a9",
-    "mlflow-skinny==3.10.0rc0",
+    # "mlflow-skinny==3.10.0rc0",
     # temp: manually installed server binary
     "eval-hub-server==0.1.0a0",
 ]

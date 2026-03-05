@@ -666,7 +666,7 @@ wheels = [
 ]
 
 [[package]]
-name = "eval-hub-local-test"
+name = "eval-hub-local-demo"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
@@ -674,7 +674,6 @@ dependencies = [
     { name = "eval-hub-server" },
     { name = "lighteval" },
     { name = "litellm", extra = ["caching"] },
-    { name = "mlflow-skinny" },
 ]
 
 [package.metadata]
@@ -683,7 +682,6 @@ requires-dist = [
     { name = "eval-hub-server", path = "../eval-hub/python-server/dist/eval_hub_server-0.1.0a0-py3-none-macosx_11_0_arm64.whl" },
     { name = "lighteval", specifier = "==0.13.0" },
     { name = "litellm", extras = ["caching"], specifier = "==1.80.17" },
-    { name = "mlflow-skinny", specifier = "==3.10.0rc0" },
 ]
 
 [[package]]
