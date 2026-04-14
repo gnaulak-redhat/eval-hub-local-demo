@@ -92,7 +92,7 @@ class LightEvalAdapter(FrameworkAdapter):
             )
 
             self._validate_config(config)
-            tasks = self._parse_benchmark_tasks(config.benchmark_id, config.benchmark_config)
+            tasks = self._parse_benchmark_tasks(config.benchmark_id, config.parameters)
             output_dir = Path(tempfile.mkdtemp(prefix="lighteval_"))
             logger.info(f"Configuration validated. Tasks: {tasks}, Output dir: {output_dir}")
 
@@ -132,10 +132,10 @@ class LightEvalAdapter(FrameworkAdapter):
                 model_config=config.model,
                 tasks=tasks,
                 output_dir=output_dir,
-                num_fewshot=config.benchmark_config.get("num_few_shot", 0),
+                num_fewshot=config.parameters.get("num_few_shot", 0),
                 limit=config.num_examples,
-                batch_size=config.benchmark_config.get("batch_size", 1),
-                benchmark_config=config.benchmark_config,
+                batch_size=config.parameters.get("batch_size", 1),
+                benchmark_config=config.parameters,
             )
 
             # Phase 4: Post-processing
@@ -153,10 +153,6 @@ class LightEvalAdapter(FrameworkAdapter):
                     completed_steps=3,
                 )
             )
-
-            # logger.info("Sleeping for 300 seconds")
-            # time.sleep(300)
-            logger.info("Done Sleeping")
 
             evaluation_results = self._extract_evaluation_results(
                 lighteval_results, config.benchmark_id
@@ -195,14 +191,27 @@ class LightEvalAdapter(FrameworkAdapter):
             )
 
             oci_artifact = None
-            if output_files and config.exports and config.exports.oci:
+            oci_exports = config.exports.oci if config.exports else None
+            if oci_exports is not None and output_files:
+                coords = oci_exports.coordinates.model_copy(deep=True)
+                coords.annotations.update(
+                    {
+                        "org.opencontainers.image.created": datetime.now(UTC).isoformat(),
+                        "io.github.eval-hub.benchmark": config.benchmark_id,
+                        "io.github.eval-hub.model": config.model.name,
+                        "io.github.eval-hub.job_id": config.id,
+                    }
+                )
                 oci_artifact = callbacks.create_oci_artifact(
                     OCIArtifactSpec(
+                        # files_path=Path("/tmp/lighteval_results") / config.id,
                         files_path=output_files[0].parent,
-                        coordinates=config.exports.oci.coordinates,
+                        coordinates=coords,
                     )
                 )
-                logger.info(f"OCI artifact persisted: {oci_artifact.digest}")
+                logger.info(f"OCI artifact created: {oci_artifact.reference}")
+            else:
+                logger.info("No OCI exports configured; skipping artifact persistence")
 
             # Compute final duration
             duration = time.time() - start_time
@@ -221,11 +230,11 @@ class LightEvalAdapter(FrameworkAdapter):
                 evaluation_metadata={
                     "framework": "lighteval",
                     "framework_version": self._get_lighteval_version(),
-                    "num_few_shot": config.benchmark_config.get("num_few_shot", 0),
-                    "random_seed": config.benchmark_config.get("random_seed"),
-                    "benchmark_config": config.benchmark_config,
+                    "num_few_shot": config.parameters.get("num_few_shot", 0),
+                    "random_seed": config.parameters.get("random_seed"),
+                    "benchmark_config": config.parameters,
                     "tasks": tasks,
-                    "model_provider": config.benchmark_config.get("provider", "endpoint"),
+                    "model_provider": config.parameters.get("provider", "endpoint"),
                 },
                 oci_artifact=oci_artifact,
             )
@@ -280,7 +289,7 @@ class LightEvalAdapter(FrameworkAdapter):
             raise ValueError("model.name is required")
 
         # Validate model provider (from benchmark_config)
-        provider = config.benchmark_config.get("provider", "endpoint")
+        provider = config.parameters.get("provider", "endpoint")
         valid_providers = ["transformers", "vllm", "openai", "anthropic", "endpoint", "litellm"]
         if provider not in valid_providers:
             logger.warning(
@@ -536,9 +545,7 @@ class LightEvalAdapter(FrameworkAdapter):
                     metric_type = "bool"
 
                 # Create hierarchical metric name: task.metric
-                # Sanitize task_name: MLflow rejects '|' (used by LightEval for few-shot count)
-                safe_task_name = task_name.replace("|", "_")
-                full_metric_name = f"{safe_task_name}.{metric_name}"
+                full_metric_name = f"{task_name}.{metric_name}"
 
                 evaluation_results.append(
                     EvaluationResult(
@@ -570,7 +577,7 @@ class LightEvalAdapter(FrameworkAdapter):
             Overall score (average of primary metrics), or None if not applicable
         """
         # Primary metrics to consider for overall score
-        primary_metric_names = ["accuracy", "acc", "exact_match", "f1", "bleu"]
+        primary_metric_names = ["accuracy", "acc", "exact_match", "f1", "bleu", "extractive_match"]
 
         primary_values = []
         for result in results:
@@ -605,8 +612,8 @@ class LightEvalAdapter(FrameworkAdapter):
         """
         # LightEval doesn't always provide this directly
         # Try to extract from config or metadata
-        if "config" in lighteval_results and "num_examples" in lighteval_results["config"]:
-            return lighteval_results["config"]["num_examples"]
+        if "config_general" in lighteval_results and "max_samples" in lighteval_results["config_general"]:
+            return lighteval_results["config_general"]["max_samples"]
 
         # Otherwise return 0 (unknown)
         return 0
@@ -635,6 +642,8 @@ class LightEvalAdapter(FrameworkAdapter):
             output_dir = self.local_jobs_base_path / "results"
         else:
             output_dir = Path(__file__).parent / "results"
+
+        # output_dir = Path("/tmp/lighteval_results") / job_id
 
         output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -754,28 +763,8 @@ def main() -> None:
         logger.info(f"Benchmark: {adapter.job_spec.benchmark_id}")
         logger.info(f"Model: {adapter.job_spec.model.name}")
 
-        logger.info(f"Callback URL: {adapter.job_spec.callback_url}")
-        logger.info(f"Provider ID: {adapter.job_spec.provider_id}")
-        logger.info(
-            "OCI registry auth config present: %s",
-            bool(adapter.settings.oci_auth_config_path),
-        )
-        logger.info("OCI insecure: %s", adapter.settings.oci_insecure)
-        logger.info("EvalHub insecure: %s", adapter.settings.evalhub_insecure)
-        logger.info("=" * 80)
-
-        # Initialize callbacks using job spec callback_url and adapter settings
-        callbacks = DefaultCallbacks(
-            job_id=adapter.job_spec.id,
-            benchmark_id=adapter.job_spec.benchmark_id,
-            provider_id=adapter.job_spec.provider_id,
-            sidecar_url=adapter.job_spec.callback_url,
-            insecure=bool(adapter.settings.evalhub_insecure),
-            auth_token_path=adapter.settings.resolved_auth_token_path,
-            ca_bundle_path=adapter.settings.resolved_ca_bundle_path,
-            oci_auth_config_path=adapter.settings.oci_auth_config_path,
-            oci_insecure=bool(adapter.settings.oci_insecure),
-        )
+        # Create callbacks using adapter settings
+        callbacks = DefaultCallbacks.from_adapter(adapter)
 
         # Run benchmark job
         results = adapter.run_benchmark_job(adapter.job_spec, callbacks)
@@ -783,12 +772,16 @@ def main() -> None:
         logger.info(f"Overall score: {results.overall_score}")
         logger.info(f"Evaluated {results.num_examples_evaluated} examples")
 
+        # Save metrics to MLflow (if experiment is configured)
+        rid = callbacks.mlflow.save(results, adapter.job_spec)
+        if rid:
+            results.mlflow_run_id = rid
+            logger.info(f"Metrics saved to MLflow (run_id: {rid})")
+        else:
+            logger.warning("Failed to save metrics to MLflow")
+
         # Report final results
         callbacks.report_results(results)
-
-        # Log metrics to MLflow if experiment is configured
-        callbacks.report_metrics_to_mlflow(results, adapter.job_spec)
-        logger.info("Metrics reported to MLflow")
 
         sys.exit(0)
 

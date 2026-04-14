@@ -1,21 +1,20 @@
-id: c_provider1
-name: Custom Provider 1
-description: Custom provider 1 for evaluation framework
+id: local_lighteval
+name: Local LightEval
+description: Local LightEval for evaluation framework
 type: custom
 runtime:
   local:
     command: "python main.py"
     env:
-      - name: LOG_LEVEL
-        value: DEBUG
+      # - name: LOG_LEVEL
+      #   value: DEBUG
       - name: OCI_INSECURE
         value: "true"
-        
 
 benchmarks:
   - id: gsm8k
-    name: C_GSM8Kier
-    description: Custom Grade School Math 8K - arithmetic reasoning
+    name: GSM8K
+    description: Grade School Math 8K - arithmetic reasoning
     category: math
     metrics:
       - exact_match
@@ -25,9 +24,9 @@ benchmarks:
     tags:
       - math
       - reasoning
-      - c_provider1
+      - local_lighteval
   - id: hellaswag
-    name: C_HellaSwag
+    name: HellaSwag
     description: Commonsense reasoning around everyday activities
     category: reasoning
     metrics:
@@ -38,4 +37,4 @@ benchmarks:
     tags:
       - reasoning
       - commonsense
-      - c_provider1
+      - local_lighteval

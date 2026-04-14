@@ -1,6 +1,6 @@
 [project]
 name = "eval-hub-local-demo"
-version = "0.1.0"
+version = "0.0.2"
 requires-python = ">=3.12"
 dependencies = [
     # Framework of choice
@@ -10,12 +10,21 @@ dependencies = [
     "litellm[caching]==1.80.17",
 
     # Eval-hub SDK for framework adapter pattern
-    "eval-hub-sdk[adapter]==0.1.0a9",
-    # "mlflow-skinny==3.10.0rc0",
-    # temp: manually installed server binary
-    "eval-hub-server==0.1.0a0",
+    "eval-hub-sdk[adapter]==0.1.5",
+    "eval-hub-server>=0.3.0.dev269",
+]
+
+[project.optional-dependencies]
+demo = [
+    "mlflow>=3.11.1",
+    "ipykernel>=7.2.0",
+    "oras>=0.2.41"
 ]
 
 [tool.uv.sources]
-eval-hub-server = { path = "/Users/gnaulak/workspace/gitrepos/eval-hub/python-server/dist/eval_hub_server-0.1.0a0-py3-none-macosx_11_0_arm64.whl" }
-eval-hub-sdk = { path = "/Users/gnaulak/workspace/gitrepos/eval-hub-sdk/dist/eval_hub_sdk-0.1.0a9-py3-none-any.whl" }
+eval-hub-server = { index = "testpypi" }
+
+[[tool.uv.index]]
+name = "testpypi"
+url = "https://test.pypi.org/simple/"
+explicit = true
