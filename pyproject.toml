@@ -1,24 +1,19 @@
 [project]
 name = "eval-hub-local-demo"
-version = "0.0.2"
+version = "0.0.1"
 requires-python = ">=3.12"
 dependencies = [
-    # Framework of choice
-    # LightEval framework
-    "lighteval==0.13.0",
-    # LiteLLM for endpoint support
-    "litellm[caching]==1.80.17",
-
-    # Eval-hub SDK for framework adapter pattern
-    "eval-hub-sdk[adapter]==0.1.5",
-    "eval-hub-server>=0.3.0.dev269",
+    "eval-hub-server>=0.4.0.dev363",
 ]
 
 [project.optional-dependencies]
 demo = [
     "mlflow>=3.11.1",
+    # demo notebook dependencies
     "ipykernel>=7.2.0",
-    "oras>=0.2.41"
+    "ipywidgets>=8.1.8",
+    "oras>=0.2.41",
+    "eval-hub-sdk[client]>=0.1.7",
 ]
 
 [tool.uv.sources]

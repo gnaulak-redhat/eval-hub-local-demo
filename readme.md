@@ -1,247 +1,161 @@
-# 1. Eval Hub Local Demo
+# Running LightEval locally with EvalHub
 
-Showcase how eval-hub-server can be used to run evaluation locally. This example hook it up with lighteval framework
+This guide shows how to use eval-hub-server to run LightEval evaluations locally.
 
-# 2. Setup
+## Prerequisites
 
-- 2.1 install eval-hub-sdk and other required packages
-- 2.2 hook up `main.py` with eval-hub-sdk adaptor
-- 2.3 MLflow server running at `http://localhost:5000`
-- 2.4 OCI registry running at `localhost:5001`
-  - `crane` tool can be used to validate the OCI (optional)
-- 2.5 LLM deployed `http://localhost:8001`
+The following tools are expected to be available on your machine:
 
-## 2.1 install eval-hub-sdk and other required packages
+- [uv](https://docs.astral.sh/uv/) — Python package manager
+- [podman](https://podman.io/) (or Docker) — for running the OCI registry
+- [ollama](https://ollama.com/) (or any OpenAI-compatible LLM server) — for serving a local model
+
+The setup runs eval-hub-server, MLflow, an OCI registry, and an LLM model all on `localhost`.
+
+## 1. Download the LightEval adapter
+
+Download the adapter driver and its requirements from eval-hub-contrib:
+
+```bash
+curl -o main.py https://raw.githubusercontent.com/eval-hub/eval-hub-contrib/main/adapters/lighteval/main.py
+curl -o requirements.txt https://raw.githubusercontent.com/eval-hub/eval-hub-contrib/main/adapters/lighteval/requirements.txt
+```
+
+## 2. Install dependencies
+
+Install the project packages and the LightEval adapter requirements:
 
 ```bash
 uv sync --extra demo
-source .venv/bin/activate
+uv pip install -r requirements.txt
 ```
 
-> **Note:** Currently `eval-hub-sdk[adapter, server]` are both sourced from wheel files available locally via `pyproject.toml` bypass. When ready, they will be available from PyPI directly.
+This installs eval-hub-server, MLflow, packages required for the notebook `evalhub-client.ipynb`, and the LightEval adapter runtime dependencies.
 
-## 2.2 hook up `main.py` with eval-hub-sdk adaptor
+## 3. Start MLflow
 
-Update main.py with logic, implement `FrameworkAdapter`:
+> **Note:** The first `mlflow server` start may take a few extra seconds while it initializes the database.
 
-- main
-  - run_benchmark_job
-    - callbacks.report_status
-    - callbacks.create_oci_artifact
-  - callbacks.report_results
-  - callbacks.report_metrics_to_mlflow
-
-Update config dir files ~/config:
-
-- providers yaml file(s)
-- config.yaml
-
-## 2.3  Start MLflow server
-
-> **Note:** The first `mlflow server` start may take some extended seconds while it initializes the database.
+Activate the venv and start the MLflow server there:
 
 ```bash
-rm -f mlflow.db && mlflow server \
+source .venv/bin/activate
+
+mlflow server \
   --backend-store-uri sqlite:///mlflow.db \
   --host localhost \
   --port 5000
 ```
 
-Verify it's running:
+Verify it's running from another terminal:
 
 ```bash
 curl http://localhost:5000/health
 ```
 
-MLFlow UI dashboard can be accessed using browser at `http://localhost:5000`
+The MLflow UI dashboard is accessible at `http://localhost:5000`.
 
-## 2.4 Start OCI registry
+## 4. Start the OCI registry
+
+In another terminal, pull the registry image and start it on `localhost:5001`:
 
 ```bash
+podman pull docker.io/library/registry:2
+
 podman run -d -p 5001:5000 \
     --name eval-hub-oci-registry \
     -e REGISTRY_STORAGE_DELETE_ENABLED=true \
     docker.io/library/registry:2
-
 ```
 
-## 2.5 Start LLM model
+## 5. Start the LLM server
 
-To use llama.cpp, we can use brew to install on macOS
+> **Note:** Ollama is used here as an example. Any OpenAI-compatible LLM server (llama.cpp, LM Studio, etc.) will work.
 
-```zsh
-brew install llama.cpp
-```
-
-Download a model from huggingface
+Pull a model:
 
 ```bash
-mkdir -p models
-cd models
-curl -L -o qwen2.5-1.5b-instruct.gguf \
-  https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf
-```
-
-Start the server
-
-```bash
-llama-server -m qwen2.5-1.5b-instruct-q4_k_m.gguf -c 2048 --port 8001
-```
-
-Verify it is running
-
-```zsh
-curl http://127.0.0.1:8001/v1/models
-```
-
-# 3. Runnimg Evaluation job
-
-## Start eval-hub-server
-
-With MLflow env vars (eval-hub-server from venv):
-
-```bash
-MLFLOW_TRACKING_URI=http://localhost:5000 \
-SERVICE_URL=http://localhost:8080 \
-  eval-hub-server --local --configdir ./config
+ollama pull llama3.2:3b-instruct-q4_K_M
 ```
 
 Verify it's running:
 
 ```bash
+curl -s http://localhost:11434/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "llama3.2:3b-instruct-q4_K_M",
+    "messages": [{"role": "user", "content": "Why is the sky blue?"}],
+    "max_tokens": 100
+  }' | jq "."
+```
+
+## 6. Configure eval-hub-server
+
+Download the template `config.yaml` from the eval-hub repository:
+
+```bash
+mkdir -p config
+curl -o config/config.yaml https://raw.githubusercontent.com/eval-hub/eval-hub/main/config/config.yaml
+```
+
+Create the provider configuration `config/providers/lighteval.yaml`:
+
+```bash
+mkdir -p config/providers
+
+cat > config/providers/lighteval.yaml << 'EOF'
+id: lighteval
+name: LightEval
+description: LightEval for evaluation framework
+runtime:
+  local:
+    command: "python main.py"
+    env:
+      - name: OCI_INSECURE
+        value: "true"
+
+benchmarks:
+  - id: gsm8k
+    name: Grade-school math word problems
+    description: |-
+      Multi-step arithmetic word problems requiring 2-8 reasoning steps (8-shot, 1,319 examples).
+    category: math
+    metrics:
+      - exact_match
+      - acc
+    num_few_shot: 8
+    dataset_size: 1319
+    tags:
+      - math
+      - reasoning
+      - lighteval
+    primary_score:
+      metric: acc
+      lower_is_better: false
+    pass_criteria:
+      threshold: 0.25
+EOF
+```
+
+## 7. Start eval-hub-server
+
+In a terminal with the venv activated, start the server with the required environment variables:
+
+```bash
+source .venv/bin/activate
+
+MLFLOW_TRACKING_URI=http://localhost:5000 \
+SERVICE_URL=http://localhost:8080 \
+  eval-hub-server --local --configdir ./config
+```
+
+Verify it's running in another terminal:
+
+```bash
 curl http://localhost:8080/api/v1/health
 ```
 
-## Create Evaluation job
+## 8. Run an evaluation
 
-Check the expected custom provider is available `local_lighteval`
-
-```bash
-curl http://localhost:8080/api/v1/evaluations/providers \
-  -H 'content-type: application/json' | jq "."
-```
-
-Start evaluation job
-
-```bash
-curl --request POST \
-  --url http://localhost:8080/api/v1/evaluations/jobs \
-  --header 'content-type: application/json' \
-  --data '{
-  "model": {
-    "url": "http://localhost:8001",
-    "name": "qwen2.5-1.5b-instruct-q4_k_m.gguf"
-  },
-  "benchmarks": [
-    {
-      "id": "hellaswag",
-      "provider_id": "local_lighteval",
-      "parameters": {
-        "num_examples": 10
-      }
-    }
-  ],
-  "experiment": {
-    "name": "hellaswag-exp1",
-    "tags": [
-      {
-        "key": "model",
-        "value": "qwen2.5-1.5b-instruct-q4_k_m.gguf"
-      },
-      {
-        "key": "benchmark",
-        "value": "hellaswag"
-      }
-    ]
-  },
-  "exports": {
-    "oci": {
-      "coordinates": {
-        "oci_host": "localhost:5001",
-        "oci_repository": "eval-results",
-        "oci_tag": "hellaswag-exp1"
-      }
-    }
-  }
-}'
-```
-
-## Monitor the evaluation job run
-Note the job_id from the Create Evaluation job
-
-Example:
-```bash
-JOB_ID="9389c286-ab8f-40f7-bbe7-5fb6c49f690b"
-
-curl --request GET \
-  --url http://localhost:8080/api/v1/evaluations/jobs/$JOB_ID | jq "."
-
-```
-
-
-## Inspect MLFlow
-
-check experiments
-
-```bash
-EXPERIMENT_NAME=hellaswag-exp1
-curl -s "http://localhost:5000/api/2.0/mlflow/experiments/get-by-name?experiment_name=$EXPERIMENT_NAME" | jq .
-```
-
-check metrics
-
-```bash
-curl -s -X POST "http://localhost:5000/api/2.0/mlflow/runs/search" \
-  -H "Content-Type:  application/json" \
-  -d '{"experiment_ids": ["1"]}' | jq '.runs[] | {run_id: .info.run_id, status: .info.status, metrics: .data.metrics, params: .data.params}'
-```
-
-
-## Inspect OCI registry
-
-Set the tag (default `hellaswag-exp1`):
-
-```bash
-export OCI_TAG="eval-exp1"
-```
-
-List and inspect:
-
-```bash
-crane ls localhost:5001/eval-results --insecure
-
-# Inspect a specific tag's manifest
-crane manifest localhost:5001/eval-results:$OCI_TAG --insecure
-
-# Inspect config/layers
-crane config localhost:5001/eval-results:$OCI_TAG --insecure
-
-# List tags and show manifest for each
-for tag in $(crane ls localhost:5001/eval-results --insecure); do
-  echo "=== $tag ==="
-  crane manifest localhost:5001/eval-results:$tag --insecure | jq .
-done
-```
-
-### Validate OCI registry uploaded files
-
-Pull and extract a single tag:
-
-```bash
-crane pull localhost:5001/eval-results:$OCI_TAG eval-results.tar --insecure
-mkdir -p eval-results-contents && tar -xf eval-results.tar -C eval-results-contents
-
-cd eval-results-contents
-for f in *.tar.gz; do tar -xzf "$f"; done
-
-# will show you the oci uploaded files.
-cat *.json
-```
-
-clean up:
-
-```bash
-crane delete localhost:5001/eval-results:hellaswag-exp1 --insecure
-crane delete localhost:5001/eval-results:$OCI_TAG --insecure  
-```
-
+Use the `evalhub-client.ipynb` notebook to run the evaluation lifecycle.
